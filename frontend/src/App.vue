@@ -83,6 +83,8 @@ const isLoadingDashboard = ref(false);
 
 const evalReport = ref<EvalSuiteReport | null>(null);
 const isRunningEvals = ref(false);
+const isAutoDiscovering = ref(false);
+const autoDiscoverProgress = ref('');
 
 const hasResult = computed(() => result.value !== null);
 
@@ -354,6 +356,45 @@ async function runLiveEvals() {
   } finally {
     isRunningEvals.value = false;
   }
+}
+
+async function runAutoDiscover() {
+  if (isRunning.value || isAutoDiscovering.value) return;
+  isAutoDiscovering.value = true;
+  errorMessage.value = '';
+  try {
+    const preferredTable =
+      customTables.value.length > 0
+        ? customTables.value[customTables.value.length - 1].name
+        : undefined;
+    const res = await fetch('/api/insights/suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableName: preferredTable }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to generate insight plan.');
+
+    const questions: string[] = data.questions || [];
+    for (let i = 0; i < questions.length; i++) {
+      autoDiscoverProgress.value = `${i + 1}/${questions.length}`;
+      await askQuestion(questions[i]);
+    }
+    pinNotice.value = `Auto-discovered ${questions.length} charts — click "Export All (${sessionResults.value.length}) PDF" to download as one report!`;
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Auto-Discover failed.';
+  } finally {
+    isAutoDiscovering.value = false;
+    autoDiscoverProgress.value = '';
+  }
+}
+
+function selectSessionResult(item: QueryResult) {
+  result.value = item;
+  question.value = item.question;
+  selectedChartType.value = item.chartType === 'table' ? 'bar' : item.chartType;
+  editableSql.value = item.sql;
+  activeTab.value = item.chartType === 'table' ? 'table' : 'chart';
 }
 
 function exportCsv() {
@@ -757,12 +798,23 @@ onMounted(async () => {
               />
               <button
                 type="submit"
-                :disabled="isRunning"
+                :disabled="isRunning || isAutoDiscovering"
                 class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
               >
-                <Loader2 v-if="isRunning" class="h-4 w-4 animate-spin" />
+                <Loader2 v-if="isRunning && !isAutoDiscovering" class="h-4 w-4 animate-spin" />
                 <Play v-else class="h-4 w-4" />
-                {{ isRunning ? 'Analyzing...' : 'Ask AI' }}
+                {{ isRunning && !isAutoDiscovering ? 'Analyzing...' : 'Ask AI' }}
+              </button>
+              <button
+                type="button"
+                @click="runAutoDiscover"
+                :disabled="isRunning || isAutoDiscovering"
+                class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/25 disabled:opacity-50"
+                title="Automatically inspect active tables/uploads and generate 4 complementary charts ready for multi-chart PDF export"
+              >
+                <Loader2 v-if="isAutoDiscovering" class="h-4 w-4 animate-spin" />
+                <Sparkles v-else class="h-4 w-4" />
+                {{ isAutoDiscovering ? `Auto ${autoDiscoverProgress}` : 'Auto-Discover (4)' }}
               </button>
             </form>
 
@@ -826,6 +878,30 @@ onMounted(async () => {
           </section>
 
           <section v-if="hasResult && result" class="space-y-4">
+            <div
+              v-if="sessionResults.length >= 2"
+              class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2"
+            >
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Session Charts ({{ sessionResults.length }}):
+              </span>
+              <button
+                v-for="(item, idx) in sessionResults"
+                :key="'sess-' + idx"
+                type="button"
+                @click="selectSessionResult(item)"
+                :class="
+                  result?.question === item.question
+                    ? 'border-indigo-500 bg-indigo-600/25 text-white'
+                    : 'border-slate-700/80 bg-slate-800/70 text-slate-300 hover:border-slate-500'
+                "
+                class="max-w-[230px] truncate rounded-lg border px-2.5 py-1 text-xs transition"
+                :title="item.question"
+              >
+                {{ idx + 1 }}. {{ item.question }}
+              </button>
+            </div>
+
             <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="text-xs font-semibold uppercase tracking-wider text-indigo-400">

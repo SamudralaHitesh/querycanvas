@@ -23,6 +23,7 @@ import {
   ingestPdfBuffer,
 } from './services/csvIngest.js';
 import { runFullEvalSuite } from './services/evalRunner.js';
+import { suggestInsightQuestions } from './services/insightSuggester.js';
 import { getActiveProviderInfo } from './services/llm.js';
 import { runNlToSqlPipeline } from './services/queryEngine.js';
 import { validateAndSanitizeSql } from './services/sqlGuard.js';
@@ -253,6 +254,18 @@ app.delete('/api/dashboard/:id', (req, res) => {
   }
   deletePinnedChart(id);
   res.json({ ok: true });
+});
+
+app.post('/api/insights/suggest', async (req, res) => {
+  try {
+    const tableName = req.body?.tableName ? String(req.body.tableName) : undefined;
+    const suggestion = await suggestInsightQuestions(tableName);
+    res.json(suggestion);
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Failed to suggest insights.',
+    });
+  }
 });
 
 app.post('/api/evals/run', async (_req, res) => {

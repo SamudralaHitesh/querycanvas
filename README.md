@@ -1,5 +1,10 @@
 # QueryCanvas — Safe AI Text-to-SQL & Analytics Studio
 
+![Vue 3](https://img.shields.io/badge/Frontend-Vue%203%20%2B%20TypeScript-42b883?logo=vuedotjs&logoColor=white)
+![Express](https://img.shields.io/badge/Backend-Node.js%20%2B%20Express-000000?logo=express&logoColor=white)
+![SQL Guard](https://img.shields.io/badge/Security-AST%20Read--Only%20Firewall-indigo)
+![Evals](https://img.shields.io/badge/Evals-8%20Accuracy%20%2B%205%20Security-10b981)
+
 An end-to-end **Full-Stack + AI + Data Analytics** platform built with **Vue 3 + Vite (TypeScript)**, **Apache ECharts**, **CodeMirror 6**, and **Node.js + Express + SQLite / PostgreSQL (`pgvector`) + Redis**.
 
 ```mermaid
@@ -19,8 +24,9 @@ flowchart LR
 3. **Self-Healing Query Loop**: Automatically catches DB execution errors and repairs broken SQL (up to 2 retries).
 4. **Persistent CSV, Excel (`.xlsx`) & PDF Ingestion + Data Profiling**: Upload `.csv`, `.xlsx`, or `.pdf` files to persist queryable tables/documents across uploads, inspect column statistics (nulls, distincts, min/avg/max), and ask AI questions over your uploaded files.
 5. **Pin-to-Dashboard BI Board & Multi-Chart PDF Export**: Pin favorite charts to a live multi-chart dashboard that re-runs verified SQL on demand, and export either all charts from your Ask AI session (`Export All (N) PDF`) or your entire pinned dashboard (`Export Full PDF`) into one multi-page PDF report.
-6. **In-App AI & Security Evaluation Suite**: Run 8 accuracy benchmarks + 5 SQL security firewall checks directly from the **Evals** tab or via `npm run eval`.
-7. **Dual Storage Engine**: Works zero-config with built-in SQLite + in-memory cache locally, and scales seamlessly to **PostgreSQL (`pgvector`) + Redis** via `DATABASE_URL` and `REDIS_URL`.
+6. **1-Click AI Auto-Discover (4 Charts) & Session Chart Switcher**: Click **Auto-Discover (4)** to inspect active schemas or newly uploaded files, automatically generate & run 4 complementary analytical queries, switch between charts in-place, and export all 4 into a single executive PDF.
+7. **In-App AI & Security Evaluation Suite**: Run 8 accuracy benchmarks + 5 SQL security firewall checks directly from the **Evals** tab, via `npm run eval`, or `npm test` (a ready-to-use GitHub Actions workflow template is included locally at `.github/workflows/ci.yml`).
+8. **Dual Storage Engine**: Works zero-config with built-in SQLite + in-memory cache locally, and scales seamlessly to **PostgreSQL (`pgvector`) + Redis** via `DATABASE_URL` and `REDIS_URL`.
 
 ## Local Quick Start
 
