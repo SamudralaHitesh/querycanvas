@@ -1,0 +1,16 @@
+month,region,category,units_sold,revenue,profit
+2026-01,South,Cloud SaaS,120,24000,16800
+2026-01,West,AI Tools,85,21250,14875
+2026-02,South,Cloud SaaS,140,28000,19600
+2026-02,North,Data Analytics,95,19000,12350
+2026-02,West,AI Tools,110,27500,19250
+2026-03,East,Security,70,17500,11900
+2026-03,South,Cloud SaaS,165,33000,23100
+2026-03,North,Data Analytics,115,23000,14950
+2026-04,West,AI Tools,135,33750,23625
+2026-04,East,Security,90,22500,15300
+2026-05,South,Cloud SaaS,190,38000,26600
+2026-05,North,Data Analytics,130,26000,16900
+2026-06,West,AI Tools,160,40000,28000
+2026-06,East,Security,105,26250,17850
+2026-06,South,Cloud SaaS,210,42000,29400

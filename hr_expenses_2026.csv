@@ -1,0 +1,13 @@
+department,quarter,expense_type,budget_usd,actual_spend,headcount
+Engineering,2026-Q1,Cloud Infra,45000,48200,28
+Engineering,2026-Q2,Cloud Infra,48000,51500,31
+Engineering,2026-Q3,AI APIs,22000,26400,34
+Sales,2026-Q1,Travel & Events,18000,16200,15
+Sales,2026-Q2,Ads & Campaigns,30000,32800,17
+Sales,2026-Q3,Ads & Campaigns,32000,29500,18
+Marketing,2026-Q1,Content & SEO,14000,13100,9
+Marketing,2026-Q2,Conferences,20000,22400,10
+Marketing,2026-Q3,Paid Social,25000,,11
+Operations,2026-Q1,Office & Tools,12000,11400,8
+Operations,2026-Q2,Security Audit,16000,15800,8
+Operations,2026-Q3,Office & Tools,12500,12100,9

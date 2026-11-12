@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: querycanvas-postgres
+    environment:
+      POSTGRES_USER: querycanvas
+      POSTGRES_PASSWORD: querycanvas_dev_password
+      POSTGRES_DB: querycanvas
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: querycanvas-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

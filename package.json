@@ -1,0 +1,12 @@
+{
+  "name": "querycanvas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QueryCanvas — Safe AI Text-to-SQL & Interactive Analytics Studio",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "eval": "npm --prefix backend run eval"
+  }
+}
