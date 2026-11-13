@@ -193,7 +193,8 @@ function shouldRouteToPdf(
 
 export async function runNlToSqlPipeline(
   question: string,
-  onStep?: (event: PipelineStepEvent) => void
+  onStep?: (event: PipelineStepEvent) => void,
+  options?: { bypassCache?: boolean }
 ): Promise<QueryExecutionResponse> {
   const totalStart = performance.now();
   const allTables = await listUserTablesAsync();
@@ -247,7 +248,7 @@ export async function runNlToSqlPipeline(
   const tablesRetrieved = selected.map((t) => t.name);
 
   onStep?.({ stage: 'cache', message: 'Checking semantic query cache...' });
-  const cached = await getCachedQuery(question, schemaVersion);
+  const cached = options?.bypassCache ? null : await getCachedQuery(question, schemaVersion);
 
   let plan: GeneratedSqlPlan;
   let cacheHit = false;
@@ -313,7 +314,12 @@ export async function runNlToSqlPipeline(
     throw new Error(lastError || 'Query execution failed.');
   }
 
-  if (!cacheHit) {
+  const isFallbackOrDemo =
+    plan.providerUsed.includes('fallback') ||
+    plan.providerUsed.includes('demo') ||
+    plan.explanation.includes('Cloud LLM temporarily busy');
+
+  if (!cacheHit && !isFallbackOrDemo) {
     await setCachedQuery(question, schemaVersion, {
       sql: finalSql,
       explanation: plan.explanation,

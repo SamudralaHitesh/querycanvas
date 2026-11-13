@@ -97,6 +97,8 @@ export async function setCachedQuery(
 
 export async function clearQueryCache(): Promise<void> {
   memoryStore.clear();
+  hits = 0;
+  misses = 0;
   if (redisReady && redisClient) {
     try {
       const keys = await redisClient.keys('qc:q:*');

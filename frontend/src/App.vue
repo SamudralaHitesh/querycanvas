@@ -86,14 +86,16 @@ const isRunningEvals = ref(false);
 const isAutoDiscovering = ref(false);
 const autoDiscoverProgress = ref('');
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 const hasResult = computed(() => result.value !== null);
 
 async function loadSchemaAndHistory() {
   try {
     const [schemaRes, histRes, dashRes] = await Promise.all([
-      fetch('/api/schema'),
-      fetch('/api/history'),
-      fetch('/api/dashboard'),
+      fetch(`${API_BASE}/api/schema`),
+      fetch(`${API_BASE}/api/history`),
+      fetch(`${API_BASE}/api/dashboard`),
     ]);
     if (schemaRes.ok) {
       const data = await schemaRes.json();
@@ -116,7 +118,29 @@ async function loadSchemaAndHistory() {
   }
 }
 
-async function askQuestion(promptText?: string) {
+const isClearingCache = ref(false);
+const cacheNotice = ref('');
+
+async function handleClearCache() {
+  if (isClearingCache.value) return;
+  isClearingCache.value = true;
+  cacheNotice.value = '';
+  try {
+    const res = await fetch(`${API_BASE}/api/cache/clear`, { method: 'POST' });
+    if (res.ok) {
+      cacheNotice.value = 'Cache cleared!';
+      setTimeout(() => {
+        cacheNotice.value = '';
+      }, 3000);
+    }
+  } catch {
+    // ignore
+  } finally {
+    isClearingCache.value = false;
+  }
+}
+
+async function askQuestion(promptText?: string, bypassCache = false) {
   const q = (promptText ?? question.value).trim();
   if (!q || isRunning.value) return;
   viewMode.value = 'ask';
@@ -127,10 +151,10 @@ async function askQuestion(promptText?: string) {
   pipelineSteps.value = [];
 
   try {
-    const res = await fetch('/api/query/stream', {
+    const res = await fetch(`${API_BASE}/api/query/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q }),
+      body: JSON.stringify({ question: q, bypassCache }),
     });
 
     if (!res.ok || !res.body) {
@@ -195,7 +219,7 @@ async function runEditedSql() {
   if (!editableSql.value.trim()) return;
   errorMessage.value = '';
   try {
-    const res = await fetch('/api/query/run-sql', {
+    const res = await fetch(`${API_BASE}/api/query/run-sql`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sql: editableSql.value }),
@@ -234,7 +258,7 @@ async function handleFileUpload(e: Event) {
   form.append('file', file);
 
   try {
-    const res = await fetch('/api/datasets/upload', { method: 'POST', body: form });
+    const res = await fetch(`${API_BASE}/api/datasets/upload`, { method: 'POST', body: form });
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.error || 'File upload failed');
@@ -264,7 +288,7 @@ async function handleFileUpload(e: Event) {
 
 async function loadTableProfile(tableName: string) {
   try {
-    const res = await fetch(`/api/datasets/${encodeURIComponent(tableName)}/profile`);
+    const res = await fetch(`${API_BASE}/api/datasets/${encodeURIComponent(tableName)}/profile`);
     if (res.ok) {
       const data = await res.json();
       activeProfile.value = data.profile;
@@ -276,7 +300,7 @@ async function loadTableProfile(tableName: string) {
 
 async function removeCustomTable(tableName: string) {
   try {
-    const res = await fetch(`/api/datasets/${encodeURIComponent(tableName)}`, { method: 'DELETE' });
+    const res = await fetch(`${API_BASE}/api/datasets/${encodeURIComponent(tableName)}`, { method: 'DELETE' });
     const data = await res.json();
     if (res.ok) {
       tables.value = data.tables;
@@ -291,7 +315,7 @@ async function removeCustomTable(tableName: string) {
 
 async function removePdfDoc(id: number) {
   try {
-    const res = await fetch(`/api/pdfs/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${API_BASE}/api/pdfs/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (res.ok) {
       pdfDocs.value = data.pdfs || [];
@@ -305,7 +329,7 @@ async function pinCurrentChart() {
   if (!result.value) return;
   pinNotice.value = '';
   try {
-    const res = await fetch('/api/dashboard', {
+    const res = await fetch(`${API_BASE}/api/dashboard`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -329,7 +353,7 @@ async function pinCurrentChart() {
 async function refreshDashboard() {
   isLoadingDashboard.value = true;
   try {
-    const res = await fetch('/api/dashboard');
+    const res = await fetch(`${API_BASE}/api/dashboard`);
     if (res.ok) {
       const data = await res.json();
       dashboardCards.value = data.cards || [];
@@ -340,7 +364,7 @@ async function refreshDashboard() {
 }
 
 async function unpinCard(id: number) {
-  const res = await fetch(`/api/dashboard/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/api/dashboard/${id}`, { method: 'DELETE' });
   if (res.ok) {
     dashboardCards.value = dashboardCards.value.filter((c) => c.id !== id);
   }
@@ -349,7 +373,7 @@ async function unpinCard(id: number) {
 async function runLiveEvals() {
   isRunningEvals.value = true;
   try {
-    const res = await fetch('/api/evals/run', { method: 'POST' });
+    const res = await fetch(`${API_BASE}/api/evals/run`, { method: 'POST' });
     if (res.ok) {
       evalReport.value = await res.json();
     }
@@ -367,7 +391,7 @@ async function runAutoDiscover() {
       customTables.value.length > 0
         ? customTables.value[customTables.value.length - 1].name
         : undefined;
-    const res = await fetch('/api/insights/suggest', {
+    const res = await fetch(`${API_BASE}/api/insights/suggest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tableName: preferredTable }),
@@ -815,6 +839,16 @@ onMounted(async () => {
                 <Loader2 v-if="isAutoDiscovering" class="h-4 w-4 animate-spin" />
                 <Sparkles v-else class="h-4 w-4" />
                 {{ isAutoDiscovering ? `Auto ${autoDiscoverProgress}` : 'Auto-Discover (4)' }}
+              </button>
+              <button
+                type="button"
+                @click="handleClearCache"
+                :disabled="isClearingCache"
+                class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white disabled:opacity-50"
+                title="Clear cached query plans"
+              >
+                <RefreshCw :class="['h-3.5 w-3.5', isClearingCache ? 'animate-spin text-indigo-400' : '']" />
+                {{ cacheNotice || 'Clear Cache' }}
               </button>
             </form>
 

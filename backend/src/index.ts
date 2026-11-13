@@ -16,7 +16,7 @@ import {
   listUserTablesAsync,
   savePinnedChart,
 } from './db/database.js';
-import { getCacheStats, initCache } from './services/cache.js';
+import { clearQueryCache, getCacheStats, initCache } from './services/cache.js';
 import {
   deleteCustomTable,
   ingestDatasetBuffer,
@@ -80,8 +80,18 @@ app.get('/api/history', (_req, res) => {
   });
 });
 
+app.post('/api/cache/clear', async (_req, res) => {
+  try {
+    await clearQueryCache();
+    res.json({ ok: true, message: 'Query cache cleared successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to clear cache.' });
+  }
+});
+
 app.post('/api/query/stream', async (req, res) => {
   const question = String(req.body?.question || '').trim();
+  const bypassCache = Boolean(req.body?.bypassCache);
   if (!question) {
     res.status(400).json({ error: 'Question is required.' });
     return;
@@ -96,9 +106,13 @@ app.post('/api/query/stream', async (req, res) => {
   };
 
   try {
-    const result = await runNlToSqlPipeline(question, (step) => {
-      sendEvent('step', step);
-    });
+    const result = await runNlToSqlPipeline(
+      question,
+      (step) => {
+        sendEvent('step', step);
+      },
+      { bypassCache }
+    );
     sendEvent('result', result);
     sendEvent('done', { ok: true });
   } catch (err) {
@@ -141,6 +155,7 @@ app.post('/api/datasets/upload', upload.single('file'), async (req, res) => {
   try {
     if (/\.pdf$/i.test(req.file.originalname)) {
       const pdfResult = await ingestPdfBuffer(req.file.buffer, req.file.originalname);
+      await clearQueryCache();
       res.json({
         kind: 'pdf',
         pdf: pdfResult.pdf,
@@ -152,6 +167,7 @@ app.post('/api/datasets/upload', upload.single('file'), async (req, res) => {
     }
 
     const ingested = await ingestDatasetBuffer(req.file.buffer, req.file.originalname);
+    await clearQueryCache();
     res.json({
       kind: 'table',
       dataset: ingested,
@@ -168,6 +184,7 @@ app.post('/api/datasets/upload', upload.single('file'), async (req, res) => {
 app.delete('/api/datasets/:tableName', async (req, res) => {
   try {
     await deleteCustomTable(req.params.tableName);
+    await clearQueryCache();
     res.json({ tables: await listUserTablesAsync() });
   } catch (err) {
     res.status(400).json({
@@ -176,13 +193,14 @@ app.delete('/api/datasets/:tableName', async (req, res) => {
   }
 });
 
-app.delete('/api/pdfs/:id', (req, res) => {
+app.delete('/api/pdfs/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: 'Invalid PDF id.' });
     return;
   }
   deletePdfDocument(id);
+  await clearQueryCache();
   res.json({ pdfs: listPdfDocuments() });
 });
 
