@@ -4,9 +4,10 @@
   "private": true,
   "description": "QueryCanvas — Safe AI Text-to-SQL & Interactive Analytics Studio",
   "scripts": {
+    "start": "npm --prefix backend start",
+    "build": "npm --prefix backend install && npm --prefix backend run build",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
-    "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "eval": "npm --prefix backend run eval"
   }
 }
