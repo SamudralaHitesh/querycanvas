@@ -29,7 +29,7 @@ export function getActiveProviderInfo() {
     provider,
     model:
       provider === 'gemini'
-        ? process.env.GEMINI_MODEL || 'gemini-3.8-flash'
+        ? process.env.GEMINI_MODEL || 'gemini-flash-lite-latest'
         : provider === 'openai'
           ? process.env.OPENAI_MODEL || 'gpt-4o-mini'
           : provider === 'ollama'
@@ -58,8 +58,8 @@ async function callLlmJson(systemPrompt: string, userPrompt: string): Promise<Re
 
   if (provider === 'gemini') {
     const apiKey = process.env.GEMINI_API_KEY!;
-    const primary = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-    const candidates = Array.from(new Set([primary, 'gemini-flash-latest']));
+    const primary = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
+    const candidates = Array.from(new Set([primary, 'gemini-flash-lite-latest', 'gemini-3.8-flash', 'gemini-flash-latest']));
 
     let lastErr = '';
     for (const model of candidates) {
@@ -181,7 +181,8 @@ function buildDemoSqlPlan(question: string, tables: TableSchema[]): GeneratedSql
     const tName = t.name.toLowerCase();
     const mentionsTableName = q.includes(tName);
     if (mentionsTableName) score += 10;
-    if (isCoreEcommerceQuestion && !mentionsTableName) continue;
+    const hasMatchingCol = t.columns.some((col) => q.includes(col.name.toLowerCase()));
+    if (isCoreEcommerceQuestion && !mentionsTableName && !hasMatchingCol) continue;
     for (const part of tName.split('_')) {
       if (part.length > 3 && !['data', 'table', 'sample'].includes(part) && q.includes(part)) {
         score += 3;
@@ -192,6 +193,8 @@ function buildDemoSqlPlan(question: string, tables: TableSchema[]): GeneratedSql
       const isUniqueToCustom = !coreColNames.has(cName);
       if (isUniqueToCustom && q.includes(cName)) {
         score += 5;
+      } else if (q.includes(cName)) {
+        score += 3;
       }
     }
     if (score > bestScore) {
@@ -215,6 +218,26 @@ function buildDemoSqlPlan(question: string, tables: TableSchema[]): GeneratedSql
 
     const catCol =
       textCols.find((c) => q.includes(c.name.toLowerCase())) || textCols[0];
+
+    const wantsTopN = /\b(highest|max|maximum|most|top|greatest|lowest|min|minimum|least|best|worst)\b/i.test(q);
+    const isDesc = !/\b(lowest|min|minimum|least|worst)\b/i.test(q);
+
+    if (numCol && wantsTopN) {
+      const idOrLabelCol = targetCustom.columns.find((c) => /id$|name$|code$/i.test(c.name)) || catCol;
+      const displayCols = Array.from(new Set([idOrLabelCol.name, numCol.name, catCol?.name].filter(Boolean)));
+      return {
+        sql: `SELECT ${displayCols.map((c) => `"${c}"`).join(', ')} FROM "${targetCustom.name}" ORDER BY "${numCol.name}" ${isDesc ? 'DESC' : 'ASC'} LIMIT 10`,
+        explanation: `Finds records from ${targetCustom.name} with the ${isDesc ? 'highest' : 'lowest'} ${numCol.name}.`,
+        chartType: 'bar',
+        xAxis: idOrLabelCol.name,
+        yAxis: numCol.name,
+        followUps: [
+          `Show summary from ${targetCustom.name}`,
+          `Compare ${numCol.name} by ${catCol?.name || idOrLabelCol.name} in ${targetCustom.name}`,
+        ],
+        providerUsed: 'demo-engine',
+      };
+    }
 
     const wantsAggregation =
       /\b(by|wise|per|top|sum|avg|average|total|compare|breakdown|trend|monthly)\b/i.test(q) ||
@@ -359,6 +382,21 @@ function buildDemoSqlPlan(question: string, tables: TableSchema[]): GeneratedSql
       followUps: [
         'Show top 5 products by revenue',
         'Compare revenue by product category',
+      ],
+      providerUsed: 'demo-engine',
+    };
+  }
+
+  if (q.includes('quantity') || (q.includes('order') && /highest|most|top|max|largest/i.test(q))) {
+    return {
+      sql: `SELECT o.id AS order_id, o.order_date, SUM(oi.quantity) AS total_quantity, ROUND(SUM(oi.line_total), 2) AS total_amount FROM orders o JOIN order_items oi ON o.id = oi.order_id GROUP BY o.id, o.order_date ORDER BY total_quantity DESC LIMIT 8`,
+      explanation: 'Finds completed orders with the highest total item quantity.',
+      chartType: 'bar',
+      xAxis: 'order_id',
+      yAxis: 'total_quantity',
+      followUps: [
+        'Top 5 products by revenue',
+        'Show monthly revenue trend',
       ],
       providerUsed: 'demo-engine',
     };
