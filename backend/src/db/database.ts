@@ -169,13 +169,118 @@ export function listUserTables(): TableSchema[] {
   });
 }
 
-export function getKpiSummary(): {
+export interface DynamicKpiSummary {
+  scope: string;
+  card1: { label: string; value: string };
+  card2: { label: string; value: string };
+  card3: { label: string; value: string };
+  card4: { label: string; value: string };
   totalRevenue: number;
   completedOrders: number;
   avgOrderValue: number;
   topCategory: string;
-} {
+}
+
+const CORE_TABLES = new Set([
+  'users',
+  'products',
+  'orders',
+  'order_items',
+  '_qc_history',
+  '_qc_dashboards',
+  '_qc_pdf_docs',
+]);
+
+export function getKpiSummary(tableName?: string): DynamicKpiSummary {
   const db = getWriteDb();
+
+  // If no explicit table is requested, check if a user uploaded custom table exists
+  if (!tableName) {
+    try {
+      const userTables = listUserTables();
+      const customTable = userTables.find((t) => !CORE_TABLES.has(t.name) && !t.name.startsWith('_qc_'));
+      if (customTable) {
+        tableName = customTable.name;
+      }
+    } catch {
+      // fallback to demo store
+    }
+  }
+
+  // If a specific custom table is requested and exists
+  if (tableName && tableName !== 'default' && tableName !== 'orders') {
+    try {
+      const cols = db.prepare(`PRAGMA table_info("${tableName}")`).all() as {
+        name: string;
+        type: string;
+      }[];
+
+      if (cols && cols.length > 0) {
+        const countRow = db.prepare(`SELECT COUNT(*) as cnt FROM "${tableName}"`).get() as {
+          cnt: number;
+        };
+        const rowCount = Number(countRow?.cnt || 0);
+
+        // 1. Look for revenue/amount/profit/sales column
+        const revCol =
+          cols.find((c) => /^(total_revenue|revenue|total_amount|sales|total_sales|profit|amount)$/i.test(c.name)) ||
+          cols.find((c) => /(revenue|sales|profit|amount|price)/i.test(c.name) && (c.type === 'INTEGER' || c.type === 'REAL')) ||
+          cols.find((c) => (c.type === 'INTEGER' || c.type === 'REAL') && !/(id|zip|code|rating|pct|discount)/i.test(c.name));
+
+        let totalRev = 0;
+        let avgVal = 0;
+        let revLabel = 'Total Value';
+        if (revCol) {
+          revLabel = revCol.name.replace(/_/g, ' ').toUpperCase();
+          const sumRow = db
+            .prepare(
+              `SELECT ROUND(COALESCE(SUM("${revCol.name}"), 0), 2) as tot, ROUND(COALESCE(AVG("${revCol.name}"), 0), 2) as avg FROM "${tableName}"`
+            )
+            .get() as { tot: number; avg: number };
+          totalRev = Number(sumRow?.tot || 0);
+          avgVal = Number(sumRow?.avg || 0);
+        }
+
+        // 2. Look for primary categorical dimension (Category, Segment, Region, Product, Department)
+        const catCol =
+          cols.find((c) => /^category$/i.test(c.name)) ||
+          cols.find((c) => /^(product_name|customer_segment|segment|region|department|status)$/i.test(c.name)) ||
+          cols.find((c) => /(category|segment|region|status|type|product)/i.test(c.name) && c.type === 'TEXT') ||
+          cols.find((c) => c.type === 'TEXT' && !/(id|date|url|email)/i.test(c.name));
+
+        let topCat = 'N/A';
+        let catLabel = 'Top Category';
+        if (catCol) {
+          catLabel = 'TOP ' + catCol.name.replace(/_/g, ' ').toUpperCase();
+          const topRow = db
+            .prepare(
+              `SELECT "${catCol.name}" as cat, COUNT(*) as cnt FROM "${tableName}" WHERE "${catCol.name}" IS NOT NULL AND "${catCol.name}" != '' GROUP BY "${catCol.name}" ORDER BY cnt DESC LIMIT 1`
+            )
+            .get() as { cat?: string; cnt?: number } | undefined;
+          if (topRow?.cat) topCat = String(topRow.cat);
+        }
+
+        const fmtCurr = (val: number) =>
+          '$' + (val >= 1e6 ? (val / 1e6).toFixed(2) + 'M' : val.toLocaleString());
+
+        return {
+          scope: tableName,
+          card1: { label: revLabel, value: fmtCurr(totalRev) },
+          card2: { label: 'Total Records', value: rowCount.toLocaleString() },
+          card3: { label: 'Avg per Row', value: '$' + avgVal.toLocaleString() },
+          card4: { label: catLabel, value: topCat },
+          totalRevenue: totalRev,
+          completedOrders: rowCount,
+          avgOrderValue: avgVal,
+          topCategory: topCat,
+        };
+      }
+    } catch {
+      // fallback to default store
+    }
+  }
+
+  // Default: Core Demo Store
   const orderStats = db
     .prepare(
       `SELECT
@@ -204,11 +309,21 @@ export function getKpiSummary(): {
     )
     .get() as { category?: string } | undefined;
 
+  const totalRev = Number(orderStats?.total_revenue || 0);
+  const completedOrders = Number(orderStats?.completed_orders || 0);
+  const avgOrderValue = Number(orderStats?.avg_order_value || 0);
+  const topCategory = topCatRow?.category || 'N/A';
+
   return {
-    totalRevenue: Number(orderStats?.total_revenue || 0),
-    completedOrders: Number(orderStats?.completed_orders || 0),
-    avgOrderValue: Number(orderStats?.avg_order_value || 0),
-    topCategory: topCatRow?.category || 'N/A',
+    scope: 'Demo Store',
+    card1: { label: 'Total Revenue', value: '$' + totalRev.toLocaleString() },
+    card2: { label: 'Completed Orders', value: completedOrders.toLocaleString() },
+    card3: { label: 'Avg Order Value', value: '$' + avgOrderValue.toLocaleString() },
+    card4: { label: 'Top Category', value: topCategory },
+    totalRevenue: totalRev,
+    completedOrders,
+    avgOrderValue,
+    topCategory,
   };
 }
 

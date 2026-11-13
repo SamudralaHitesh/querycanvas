@@ -46,18 +46,30 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
-app.get('/api/schema', async (_req: Request, res: Response) => {
+app.get('/api/schema', async (req: Request, res: Response) => {
   try {
+    const tableParam = typeof req.query.table === 'string' ? req.query.table : undefined;
     res.json({
       tables: await listUserTablesAsync(),
       pdfs: listPdfDocuments(),
-      kpis: getKpiSummary(),
+      kpis: getKpiSummary(tableParam),
       ai: getActiveProviderInfo(),
       db: getDbEngineInfo(),
     });
   } catch (err) {
     res.status(500).json({
       error: err instanceof Error ? err.message : 'Failed to list schema.',
+    });
+  }
+});
+
+app.get('/api/kpis', (req: Request, res: Response) => {
+  try {
+    const tableParam = typeof req.query.table === 'string' ? req.query.table : undefined;
+    res.json({ kpis: getKpiSummary(tableParam) });
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Failed to fetch KPIs.',
     });
   }
 });

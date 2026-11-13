@@ -56,6 +56,11 @@ const history = ref<HistoryItem[]>([]);
 const aiInfo = ref<{ provider: string; model: string }>({ provider: 'demo', model: 'local-demo-engine' });
 const dbInfo = ref<{ engine: string }>({ engine: 'sqlite-wal' });
 const kpis = ref<{
+  scope?: string;
+  card1?: { label: string; value: string };
+  card2?: { label: string; value: string };
+  card3?: { label: string; value: string };
+  card4?: { label: string; value: string };
   totalRevenue: number;
   completedOrders: number;
   avgOrderValue: number;
@@ -247,6 +252,33 @@ async function runEditedSql() {
   }
 }
 
+async function switchKpiScope(scopeName: string, pdfDoc?: PdfDocSummary) {
+  if (pdfDoc) {
+    kpis.value = {
+      scope: pdfDoc.filename,
+      card1: { label: 'DOCUMENT NAME', value: pdfDoc.filename },
+      card2: { label: 'TOTAL PAGES', value: `${pdfDoc.page_count} Pages` },
+      card3: { label: 'RAG PIPELINE', value: 'Semantic Chunks' },
+      card4: { label: 'SEARCH STATUS', value: 'Vector Indexed' },
+      totalRevenue: 0,
+      completedOrders: pdfDoc.page_count,
+      avgOrderValue: 0,
+      topCategory: 'PDF Document',
+    };
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/kpis?table=${encodeURIComponent(scopeName)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.kpis) kpis.value = data.kpis;
+    }
+  } catch {
+    // ignore
+  }
+}
+
 async function handleFileUpload(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -272,11 +304,13 @@ async function handleFileUpload(e: Event) {
       uploadStatus.value = `Saved PDF "${data.pdf.filename}" (${data.pdf.page_count}p)${extra}`;
       if (data.dataset?.profile) activeProfile.value = data.dataset.profile;
       question.value = `Summarize ${data.pdf.filename}`;
+      await switchKpiScope('pdf', data.pdf);
     } else {
       expandedTable.value = data.dataset.tableName;
       activeProfile.value = data.dataset.profile || null;
       uploadStatus.value = `Loaded "${data.dataset.tableName}" (${data.dataset.rowCount} rows)`;
       question.value = `Show summary from ${data.dataset.tableName}`;
+      await switchKpiScope(data.dataset.tableName);
     }
   } catch (err) {
     uploadStatus.value = '';
@@ -288,6 +322,7 @@ async function handleFileUpload(e: Event) {
 
 async function loadTableProfile(tableName: string) {
   try {
+    await switchKpiScope(tableName);
     const res = await fetch(`${API_BASE}/api/datasets/${encodeURIComponent(tableName)}/profile`);
     if (res.ok) {
       const data = await res.json();
@@ -307,6 +342,9 @@ async function removeCustomTable(tableName: string) {
       if (activeProfile.value?.tableName === tableName) {
         activeProfile.value = null;
       }
+      if (kpis.value?.scope === tableName) {
+        await switchKpiScope('default');
+      }
     }
   } catch {
     // ignore
@@ -319,6 +357,7 @@ async function removePdfDoc(id: number) {
     const data = await res.json();
     if (res.ok) {
       pdfDocs.value = data.pdfs || [];
+      await switchKpiScope('default');
     }
   } catch {
     // ignore
@@ -670,7 +709,7 @@ onMounted(async () => {
             >
               <button
                 type="button"
-                @click="askQuestion(`Summarize ${doc.filename}`)"
+                @click="switchKpiScope('pdf', doc); askQuestion(`Summarize ${doc.filename}`)"
                 class="min-w-0 flex-1 text-left"
               >
                 <p class="truncate text-xs font-medium text-slate-200 hover:text-amber-300">
@@ -761,28 +800,54 @@ onMounted(async () => {
         <!-- VIEW 1: ASK AI WORKSPACE -->
         <template v-if="viewMode === 'ask'">
           <!-- Live KPI Summary Strip -->
-          <section v-if="kpis" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-              <p class="text-[11px] uppercase tracking-wider text-slate-400">Total Revenue</p>
-              <p class="mt-1 text-lg font-bold text-emerald-400">
-                ${{ kpis.totalRevenue.toLocaleString() }}
-              </p>
+          <div v-if="kpis" class="space-y-1.5">
+            <div class="flex items-center justify-between px-1 text-xs text-slate-400">
+              <div class="flex items-center gap-2">
+                <span>Active Scope: <strong class="font-mono text-sky-300">{{ kpis.scope || 'Demo Store' }}</strong></span>
+                <span
+                  v-if="kpis.scope && kpis.scope !== 'Demo Store'"
+                  class="rounded bg-sky-500/20 px-2 py-0.5 text-[10px] font-semibold text-sky-300 ring-1 ring-sky-500/30"
+                >
+                  LIVE DATASET
+                </span>
+              </div>
+              <button
+                v-if="kpis.scope && kpis.scope !== 'Demo Store'"
+                type="button"
+                @click="switchKpiScope('default')"
+                class="text-[11px] text-slate-400 transition hover:text-white hover:underline"
+              >
+                Reset to Core Store
+              </button>
             </div>
-            <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-              <p class="text-[11px] uppercase tracking-wider text-slate-400">Completed Orders</p>
-              <p class="mt-1 text-lg font-bold text-white">{{ kpis.completedOrders }}</p>
-            </div>
-            <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-              <p class="text-[11px] uppercase tracking-wider text-slate-400">Avg Order Value</p>
-              <p class="mt-1 text-lg font-bold text-indigo-300">
-                ${{ kpis.avgOrderValue.toLocaleString() }}
-              </p>
-            </div>
-            <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-              <p class="text-[11px] uppercase tracking-wider text-slate-400">Top Category</p>
-              <p class="mt-1 truncate text-lg font-bold text-sky-300">{{ kpis.topCategory }}</p>
-            </div>
-          </section>
+
+            <section class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+                <p class="text-[11px] uppercase tracking-wider text-slate-400">{{ kpis.card1?.label || 'Total Revenue' }}</p>
+                <p class="mt-1 text-lg font-bold text-emerald-400">
+                  {{ kpis.card1?.value || ('$' + kpis.totalRevenue.toLocaleString()) }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+                <p class="text-[11px] uppercase tracking-wider text-slate-400">{{ kpis.card2?.label || 'Completed Orders' }}</p>
+                <p class="mt-1 text-lg font-bold text-white">
+                  {{ kpis.card2?.value || kpis.completedOrders }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+                <p class="text-[11px] uppercase tracking-wider text-slate-400">{{ kpis.card3?.label || 'Avg Order Value' }}</p>
+                <p class="mt-1 text-lg font-bold text-indigo-300">
+                  {{ kpis.card3?.value || ('$' + kpis.avgOrderValue.toLocaleString()) }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+                <p class="text-[11px] uppercase tracking-wider text-slate-400">{{ kpis.card4?.label || 'Top Category' }}</p>
+                <p class="mt-1 truncate text-lg font-bold text-sky-300">
+                  {{ kpis.card4?.value || kpis.topCategory }}
+                </p>
+              </div>
+            </section>
+          </div>
 
           <!-- Persistent Uploaded Files Strip (above AI search bar) -->
           <section
@@ -804,7 +869,7 @@ onMounted(async () => {
               v-for="doc in pdfDocs"
               :key="'pill-' + doc.id"
               type="button"
-              @click="askQuestion(`Summarize ${doc.filename}`)"
+              @click="switchKpiScope('pdf', doc); askQuestion(`Summarize ${doc.filename}`)"
               class="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
             >
               <FileText class="h-3 w-3" />
