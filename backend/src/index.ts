@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import cors from 'cors';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import multer from 'multer';
 import {
   deletePdfDocument,
@@ -37,7 +37,7 @@ const upload = multer({
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     ai: getActiveProviderInfo(),
@@ -46,7 +46,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.get('/api/schema', async (_req, res) => {
+app.get('/api/schema', async (_req: Request, res: Response) => {
   try {
     res.json({
       tables: await listUserTablesAsync(),
@@ -62,9 +62,9 @@ app.get('/api/schema', async (_req, res) => {
   }
 });
 
-app.get('/api/datasets/:tableName/profile', (req, res) => {
+app.get('/api/datasets/:tableName/profile', (req: Request, res: Response) => {
   try {
-    const profile = getTableProfile(req.params.tableName);
+    const profile = getTableProfile(String(req.params.tableName));
     res.json({ profile });
   } catch (err) {
     res.status(404).json({
@@ -73,14 +73,14 @@ app.get('/api/datasets/:tableName/profile', (req, res) => {
   }
 });
 
-app.get('/api/history', (_req, res) => {
+app.get('/api/history', (_req: Request, res: Response) => {
   res.json({
     history: getQueryHistory(25),
     cache: getCacheStats(),
   });
 });
 
-app.post('/api/cache/clear', async (_req, res) => {
+app.post('/api/cache/clear', async (_req: Request, res: Response) => {
   try {
     await clearQueryCache();
     res.json({ ok: true, message: 'Query cache cleared successfully.' });
@@ -89,7 +89,7 @@ app.post('/api/cache/clear', async (_req, res) => {
   }
 });
 
-app.post('/api/query/stream', async (req, res) => {
+app.post('/api/query/stream', async (req: Request, res: Response) => {
   const question = String(req.body?.question || '').trim();
   const bypassCache = Boolean(req.body?.bypassCache);
   if (!question) {
@@ -124,7 +124,7 @@ app.post('/api/query/stream', async (req, res) => {
   }
 });
 
-app.post('/api/query/run-sql', async (req, res) => {
+app.post('/api/query/run-sql', async (req: Request, res: Response) => {
   const rawSql = String(req.body?.sql || '').trim();
   const guard = validateAndSanitizeSql(rawSql);
   if (!guard.safe) {
@@ -147,7 +147,7 @@ app.post('/api/query/run-sql', async (req, res) => {
   }
 });
 
-app.post('/api/datasets/upload', upload.single('file'), async (req, res) => {
+app.post('/api/datasets/upload', upload.single('file'), async (req: Request, res: Response) => {
   if (!req.file) {
     res.status(400).json({ error: 'CSV, Excel (.xlsx), or PDF file is required.' });
     return;
@@ -181,9 +181,9 @@ app.post('/api/datasets/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-app.delete('/api/datasets/:tableName', async (req, res) => {
+app.delete('/api/datasets/:tableName', async (req: Request, res: Response) => {
   try {
-    await deleteCustomTable(req.params.tableName);
+    await deleteCustomTable(String(req.params.tableName));
     await clearQueryCache();
     res.json({ tables: await listUserTablesAsync() });
   } catch (err) {
@@ -193,7 +193,7 @@ app.delete('/api/datasets/:tableName', async (req, res) => {
   }
 });
 
-app.delete('/api/pdfs/:id', async (req, res) => {
+app.delete('/api/pdfs/:id', async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: 'Invalid PDF id.' });
@@ -204,7 +204,7 @@ app.delete('/api/pdfs/:id', async (req, res) => {
   res.json({ pdfs: listPdfDocuments() });
 });
 
-app.get('/api/dashboard', async (_req, res) => {
+app.get('/api/dashboard', async (_req: Request, res: Response) => {
   try {
     const pinned = listPinnedCharts();
     const cards = await Promise.all(
@@ -239,7 +239,7 @@ app.get('/api/dashboard', async (_req, res) => {
   }
 });
 
-app.post('/api/dashboard', (req, res) => {
+app.post('/api/dashboard', (req: Request, res: Response) => {
   const title = String(req.body?.title || req.body?.question || 'Saved Chart').trim();
   const question = String(req.body?.question || title).trim();
   const rawSql = String(req.body?.sql || '').trim();
@@ -264,7 +264,7 @@ app.post('/api/dashboard', (req, res) => {
   res.json({ card });
 });
 
-app.delete('/api/dashboard/:id', (req, res) => {
+app.delete('/api/dashboard/:id', (req: Request, res: Response) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: 'Invalid card id.' });
@@ -274,7 +274,7 @@ app.delete('/api/dashboard/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/insights/suggest', async (req, res) => {
+app.post('/api/insights/suggest', async (req: Request, res: Response) => {
   try {
     const tableName = req.body?.tableName ? String(req.body.tableName) : undefined;
     const suggestion = await suggestInsightQuestions(tableName);
@@ -286,7 +286,7 @@ app.post('/api/insights/suggest', async (req, res) => {
   }
 });
 
-app.post('/api/evals/run', async (_req, res) => {
+app.post('/api/evals/run', async (_req: Request, res: Response) => {
   try {
     const report = await runFullEvalSuite();
     res.json(report);
